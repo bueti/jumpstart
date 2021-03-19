@@ -13,7 +13,7 @@ def add_template_repository_to_source_path
     at_exit { FileUtils.remove_entry(tempdir) }
     git clone: [
       "--quiet",
-      "https://github.com/excid3/jumpstart.git",
+      "https://github.com/bueti/jumpstart.git",
       tempdir
     ].map(&:shellescape).join(" ")
 
@@ -27,10 +27,6 @@ end
 
 def rails_version
   @rails_version ||= Gem::Version.new(Rails::VERSION::STRING)
-end
-
-def rails_5?
-  Gem::Requirement.new(">= 5.2.0", "< 6.0.0.beta1").satisfied_by? rails_version
 end
 
 def rails_6?
@@ -57,20 +53,11 @@ def add_gems
   gem 'sidekiq', '~> 6.1'
   gem 'sitemap_generator', '~> 6.1', '>= 6.1.2'
   gem 'whenever', require: false
-
-  if rails_5?
-    gsub_file "Gemfile", /gem 'sqlite3'/, "gem 'sqlite3', '~> 1.3.0'"
-    gem 'webpacker', '~> 5.1', '>= 5.1.1'
-  end
 end
 
 def set_application_name
   # Add Application Name to Config
-  if rails_5?
-    environment "config.application_name = Rails.application.class.parent_name"
-  else
-    environment "config.application_name = Rails.application.class.module_parent_name"
-  end
+  environment "config.application_name = Rails.application.class.module_parent_name"
 
   # Announce the user where they can change the application name in the future.
   puts "You can change application name inside: ./config/application.rb"
@@ -127,10 +114,6 @@ end
 def add_javascript
   run "yarn add expose-loader jquery popper.js bootstrap data-confirm-modal local-time"
 
-  if rails_5?
-    run "yarn add turbolinks @rails/actioncable@pre @rails/actiontext@pre @rails/activestorage@pre @rails/ujs@pre"
-  end
-
   content = <<-JS
 const webpack = require('webpack')
 environment.plugins.append('Provide', new webpack.ProvidePlugin({
@@ -146,9 +129,7 @@ end
 def copy_templates
   remove_file "app/assets/stylesheets/application.css"
 
-  copy_file "Procfile"
-  copy_file "Procfile.dev"
-  copy_file ".foreman"
+  copy_file ".rubocop.yml"
 
   directory "app", force: true
   directory "config", force: true
@@ -156,24 +137,6 @@ def copy_templates
 
   route "get '/terms', to: 'home#terms'"
   route "get '/privacy', to: 'home#privacy'"
-end
-
-def add_sidekiq
-  environment "config.active_job.queue_adapter = :sidekiq"
-
-  insert_into_file "config/routes.rb",
-    "require 'sidekiq/web'\n\n",
-    before: "Rails.application.routes.draw do"
-
-  content = <<~RUBY
-                authenticate :user, lambda { |u| u.admin? } do
-                  mount Sidekiq::Web => '/sidekiq'
-
-                  namespace :madmin do
-                  end
-                end
-            RUBY
-  insert_into_file "config/routes.rb", "#{content}\n", after: "Rails.application.routes.draw do\n"
 end
 
 def add_announcements
@@ -243,7 +206,6 @@ after_bundle do
   add_announcements
   add_notifications
   add_multiple_authentication
-  add_sidekiq
   add_friendly_id
 
   copy_templates
